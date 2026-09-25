@@ -5,7 +5,9 @@
   "english_name": "Hungarian",
   "direction": "ltr",
   "fallback": "en",
-  "source_catalog_revision": 7,
+  "source_catalog_revision": 10,
   "license": "CC-BY-NC-SA-4.0",
-  "authors": ["Csaba Csanaki"]
+  "authors": [
+    "Csaba Csanaki"
+  ]
 }
