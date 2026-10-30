@@ -466,8 +466,11 @@ _defaults = {
     "blip_opacity": 100,
     # Resume after app restart / reboot when ATC was left enabled.
     "atc_want_playing": False,
-    # User enabled ATC during quiet hours — resume may keep overriding.
+    # One-night listen-through. Empty until means the grant is expired.
     "atc_quiet_override": False,
+    "atc_quiet_override_until": "",
+    # Quiet hours do not stop ATC audio. Screen dimming still follows the schedule.
+    "atc_play_during_quiet": False,
     # Radar clock HUD (Option A glass pill).
     "radar_hud_enabled": True,
     "radar_hud_position": "top",
@@ -717,6 +720,8 @@ _ATC_PRESERVE_KEYS = (
     "quiet_dim_restore",
     "atc_want_playing",
     "atc_quiet_override",
+    "atc_quiet_override_until",
+    "atc_play_during_quiet",
 )
 
 
@@ -1362,6 +1367,8 @@ def _settings_snapshot(state: dict) -> tuple:
         str(state.get("atc_quiet_end") or "").strip(),
         bool(state.get("atc_want_playing", False)),
         bool(state.get("atc_quiet_override", False)),
+        str(state.get("atc_quiet_override_until") or "").strip(),
+        bool(state.get("atc_play_during_quiet", False)),
         bool(state.get("radar_hud_enabled", True)),
         str(state.get("radar_hud_position") or "top"),
         clamp_radar_hud_opacity(state.get("radar_hud_opacity", 72)),
@@ -3384,11 +3391,49 @@ def atc_quiet_override() -> bool:
 def set_atc_quiet_override(enabled: bool, *, persist: bool = True) -> None:
     global _disk_synced
     value = bool(enabled)
-    if bool(_state.get("atc_quiet_override", False)) == value:
+    current = bool(_state.get("atc_quiet_override", False))
+    until = str(_state.get("atc_quiet_override_until") or "").strip()
+    if current == value and (value or not until):
         return
     _state["atc_quiet_override"] = value
+    payload = {"atc_quiet_override": value}
+    if not value and until:
+        _state["atc_quiet_override_until"] = ""
+        payload["atc_quiet_override_until"] = ""
     if persist:
-        _rmw_save({"atc_quiet_override": value})
+        _rmw_save(payload)
+    else:
+        _disk_synced = False
+
+
+def atc_quiet_override_until() -> str:
+    return str(_state.get("atc_quiet_override_until") or "").strip()
+
+
+def set_atc_quiet_override_until(value: str, *, persist: bool = True) -> None:
+    global _disk_synced
+    text = str(value or "").strip()
+    if atc_quiet_override_until() == text:
+        return
+    _state["atc_quiet_override_until"] = text
+    if persist:
+        _rmw_save({"atc_quiet_override_until": text})
+    else:
+        _disk_synced = False
+
+
+def atc_play_during_quiet() -> bool:
+    return bool(_state.get("atc_play_during_quiet", False))
+
+
+def set_atc_play_during_quiet(enabled: bool, *, persist: bool = True) -> None:
+    global _disk_synced
+    value = bool(enabled)
+    if bool(_state.get("atc_play_during_quiet", False)) == value:
+        return
+    _state["atc_play_during_quiet"] = value
+    if persist:
+        _rmw_save({"atc_play_during_quiet": value})
     else:
         _disk_synced = False
 

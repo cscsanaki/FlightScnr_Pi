@@ -2047,6 +2047,12 @@ class RoundTouchDisplay:
             settings.toggle_lofi_title_scroll()
         elif action == "quiet":
             settings.set_atc_quiet_hours_enabled(not settings.atc_quiet_hours_enabled())
+        elif action == "quiet_always":
+            self._async_play_during_quiet(not settings.atc_play_during_quiet())
+        elif action == "quiet_override":
+            from utilities import atc_audio
+
+            self._async_quiet_override(not atc_audio.quiet_override_active())
         elif action == "quiet_dim":
             settings.set_quiet_dim_enabled(not settings.quiet_dim_enabled())
             self._apply_brightness()
@@ -2120,7 +2126,7 @@ class RoundTouchDisplay:
             if prev_airport and prev_mount:
                 settings.set_atc_airport(prev_airport)
                 settings.set_atc_mount(prev_mount)
-                atc_audio.start(override=True)
+                atc_audio.start(override=atc_audio.quiet_override_active())
         else:
             atc_audio.stop()
 
@@ -2141,7 +2147,7 @@ class RoundTouchDisplay:
         atc_audio.retune_if_playing(mount=nxt)
         if not atc_audio.is_playing() and prev_mount:
             settings.set_atc_mount(prev_mount)
-            atc_audio.start(override=True)
+            atc_audio.start(override=atc_audio.quiet_override_active())
 
     def _select_audio_output(self, value: str) -> None:
         """Apply USB or Bluetooth output from the Select output picker."""
@@ -2912,6 +2918,57 @@ class RoundTouchDisplay:
             self._atc_power_redraw = True
 
         Thread(target=_worker, daemon=True, name="atc-power").start()
+
+    def _async_quiet_override(self, enabled: bool) -> None:
+        """Flip the one-night row immediately; start or stop off-thread."""
+        from utilities import atc_audio
+
+        target = bool(enabled)
+        if target:
+            if (
+                settings.atc_play_during_quiet()
+                or not atc_audio.in_quiet_hours()
+            ):
+                return
+            end = atc_audio.quiet_window_end()
+            settings.set_atc_enabled(True)
+            settings.set_atc_want_playing(True)
+            settings.set_atc_quiet_override(True)
+            if end is not None:
+                settings.set_atc_quiet_override_until(
+                    end.strftime("%Y-%m-%dT%H:%M")
+                )
+        else:
+            settings.set_atc_quiet_override(False)
+        info.invalidate_atc_labels()
+
+        def _worker() -> None:
+            try:
+                atc_audio.set_quiet_override(target)
+            except Exception:
+                logger.exception("ATC quiet override failed")
+            info.invalidate_atc_labels()
+            self._atc_power_redraw = True
+
+        Thread(target=_worker, daemon=True, name="atc-quiet-override").start()
+
+    def _async_play_during_quiet(self, enabled: bool) -> None:
+        """Flip the always-play switch immediately; apply audio off-thread."""
+        from utilities import atc_audio
+
+        target = bool(enabled)
+        settings.set_atc_play_during_quiet(target)
+        info.invalidate_atc_labels()
+
+        def _worker() -> None:
+            try:
+                atc_audio.set_play_during_quiet(target)
+            except Exception:
+                logger.exception("ATC always-play apply failed")
+            info.invalidate_atc_labels()
+            self._atc_power_redraw = True
+
+        Thread(target=_worker, daemon=True, name="atc-play-during-quiet").start()
 
     def _execute_atc_action(self, action: str) -> None:
         """Legacy Play/Stop actions — both map to the single ATC power switch."""
