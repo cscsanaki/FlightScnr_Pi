@@ -423,6 +423,8 @@ _defaults = {
     "ais_enabled": True,
     # dark | osm | stadia_dark | toner | satellite | streets | black | light | voyager | vfr
     "map_style": "dark",
+    # Airport zoom basemap. Independent of map_style. satellite | osm.
+    "airport_basemap": "satellite",
     "vfr_map_opacity": 45,
     # 100 keeps the chart as painted; lower fades it toward parchment, like VFR.
     "seamap_opacity": 100,
@@ -2292,6 +2294,35 @@ def cycle_aircraft_min_speed():
 def set_aircraft_min_speed_kt(value) -> None:
     _state["aircraft_min_speed_kt"] = _snap_aircraft_min_speed(value)
     _save(_state)
+
+
+AIRPORT_BASEMAPS = ("satellite", "osm_light", "osm_dark")
+# The first OSM choice was stored as "osm" and now means the dark palette.
+_AIRPORT_BASEMAP_ALIASES = {"osm": "osm_dark", "osm_plain": "osm_light"}
+
+
+def _normalize_airport_basemap(value: str) -> str:
+    style = str(value or "").strip().lower()
+    style = _AIRPORT_BASEMAP_ALIASES.get(style, style)
+    return style if style in AIRPORT_BASEMAPS else "satellite"
+
+
+def airport_basemap() -> str:
+    """Basemap for the airport zoom screen. Satellite stays the default."""
+    return _normalize_airport_basemap(_state.get("airport_basemap") or "satellite")
+
+
+def set_airport_basemap(value: str) -> str:
+    style = _normalize_airport_basemap(value)
+    _state["airport_basemap"] = style
+    _save(_state)
+    return style
+
+
+def cycle_airport_basemap() -> str:
+    current = airport_basemap()
+    nxt = AIRPORT_BASEMAPS[(AIRPORT_BASEMAPS.index(current) + 1) % len(AIRPORT_BASEMAPS)]
+    return set_airport_basemap(nxt)
 
 
 def map_style() -> str:

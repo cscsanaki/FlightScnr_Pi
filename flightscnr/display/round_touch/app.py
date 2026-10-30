@@ -4337,10 +4337,15 @@ class RoundTouchDisplay:
         """Screen-aware breadcrumb hit: curved band on curved-chrome screens."""
         if self.screen in (SCREEN_FLIP_BOARD, SCREEN_ISS):
             return False
+        if self.screen == SCREEN_AIRPORT:
+            # The name pill is the back target. The wide rim band was catching
+            # aircraft on the upper-left of the campus map.
+            label = airport_ground.ident() or tr("common.radar")
+            return nav.tap_curved_breadcrumb_pill(x, y, [label])
         if self.screen in (
             SCREEN_SETTINGS, SCREEN_DETAILS, SCREEN_FLIGHT, SCREEN_FIRE, SCREEN_QUAKE,
             SCREEN_FORECAST, SCREEN_UPDATE_NOTES,
-            SCREEN_TRACKED, SCREEN_AIRPORT,
+            SCREEN_TRACKED,
         ):
             return nav.tap_breadcrumb_curved(x, y)
         return nav.tap_breadcrumb(x, y)
@@ -5188,13 +5193,26 @@ class RoundTouchDisplay:
             if action == "radar":
                 self._return_to_radar()
                 self._safe_draw()
+            elif action == "worldmap":
+                airport_ground.toggle_basemap()
+                self._note_activity()
+                self._safe_draw()
             else:
-                picked = airport_ground.pick_flight(
-                    self._airport_flights(), tap[0], tap[1],
-                )
-                if picked and self._open_picked_flight(picked):
+                flights = self._airport_flights()
+                picked = airport_ground.pick_flight(flights, tap[0], tap[1])
+                if picked:
+                    # The icon raises the hockey stick. The stick opens details.
+                    airport_ground.show_callout(picked)
+                    self._note_activity()
                     self._safe_draw()
+                elif airport_ground.callout_hit(tap[0], tap[1]):
+                    tagged = airport_ground.callout_flight(flights)
+                    if tagged and self._open_picked_flight(tagged):
+                        self._safe_draw()
+                    else:
+                        self._note_activity()
                 else:
+                    airport_ground.clear_callout()
                     self._note_activity()
         elif tap and self.screen == SCREEN_DETAILS:
             action = details.tap_footer_action(tap[0], tap[1])
